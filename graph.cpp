@@ -89,35 +89,6 @@ int init_resources() {
 	return 1;
 }
 
-// Create a projection matrix that has the same effect as glViewport().
-// Optionally return scaling factors to easily convert normalized device coordinates to pixels.
-//{{{
-glm::mat4 viewport_transform(float x, float y, float width, float height, float *pixel_x = 0, float *pixel_y = 0) {
-	// Map OpenGL coordinates (-1,-1) to window coordinates (x,y),
-	// (1,1) to (x + width, y + height).
-
-	// First, we need to know the real window size:
-	float window_width = glutGet(GLUT_WINDOW_WIDTH);
-	float window_height = glutGet(GLUT_WINDOW_HEIGHT);
-
-	// Calculate how to translate the x and y coordinates:
-	float offset_x = (2.0 * x + (width - window_width)) / window_width;
-	float offset_y = (2.0 * y + (height - window_height)) / window_height;
-
-	// Calculate how to rescale the x and y coordinates:
-	float scale_x = width / window_width;
-	float scale_y = height / window_height;
-
-	// Calculate size of pixels in OpenGL coordinates
-	if (pixel_x)
-		*pixel_x = 2.0 / width;
-	if (pixel_y)
-		*pixel_y = 2.0 / height;
-
-	return glm::scale(glm::translate(glm::mat4(1), glm::vec3(offset_x, offset_y, 0)), glm::vec3(scale_x, scale_y, 1));
-}
-//}}}
-
 void display() {
 
 	glUseProgram(program);
@@ -266,7 +237,7 @@ DWORD WINAPI textIOthread(LPVOID param){
 
             //set the flag meaning that the function has been changed
             needToUpdate = true;
-            //glutPostRedisplay();
+            glutPostRedisplay();
         }
         catch (mu::Parser::exception_type &e) //parsers errors
         {
