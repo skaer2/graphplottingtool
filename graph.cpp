@@ -26,7 +26,8 @@ int oldMousecoords_x = 0;
 int oldMousecoords_y = 0;
 float mouseOffset_x = 0;
 float mouseOffset_y = 0;
-bool mouseState = 0;
+bool leftclickState = false;
+bool rightclickState = false;
 
 //2d part shader variables
 GLuint program;
@@ -56,23 +57,27 @@ GLint uniform_mytexture;
 glm::vec3 cameraPos; //3d
 glm::vec3 cameraFront; //3d
 glm::vec3 cameraUp; //3d
+glm::vec3 cameraPosBuff;
+float rotationH;
+float rotationV;
 
 struct point {
 	GLfloat x;
 	GLfloat y;
 };
 
-// index 0 for the 2d buffer array
-// index 1 for the 3d buffer array 1
-// index 2 for the 3d buffer array 2
-// index 3 for the 3d buffer array 3
-GLuint vbo[4]; 
+// vbo2d for the 2d buffer array
+// index 0 for the 3d buffer array 1
+// index 1 for the 3d buffer array 2
+// index 2 for the 3d buffer array 3
+GLuint vbo2d;
+GLuint vbo[3]; 
 
 double MySqr(double a_fVal) {  return a_fVal*a_fVal; }
 
 point graph[2000];
 bool needToUpdate = false;
-bool mode = true; //mode == true then it is set to 2d
+bool mode = false; //mode == true then it is set to 2d
 
 int init_resources() {
     //2d initialization
@@ -88,7 +93,7 @@ int init_resources() {
 		return 0;
 
 	// Create the vertex buffer object
-	glGenBuffers(4, vbo);
+	glGenBuffers(1, &vbo2d);
 
 	// Fill it in just like an array
 	for (int i = 0; i < 2000; i++) {
@@ -99,10 +104,9 @@ int init_resources() {
 	}
 
 	// Tell OpenGL to copy our array to the buffer object
-	glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo2d);
 	glBufferData(GL_ARRAY_BUFFER, sizeof graph, graph, GL_DYNAMIC_DRAW);
     //end of 2d initialization
-
 
 
 
@@ -116,7 +120,7 @@ int init_resources() {
     uniform_vertex_transform = get_uniform(program3d, "vertex_transform");
     uniform_texture_transform = get_uniform(program3d, "texture_transform");
     uniform_mytexture = get_uniform(program3d, "mytexture");
-    uniform_color3d = get_uniform(program3d, "color");
+    uniform_color3d = get_uniform(program3d, "color3d");
 
     if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
         return 0;
@@ -126,10 +130,11 @@ int init_resources() {
     for (int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             float x = (i - N / 2) / (N / 2.0);
-            float y = (i - N / 2) / (N / 2.0);
+            float y = (j - N / 2) / (N / 2.0);
              
             float d = hypotf(x, y) * 4.0; 
             float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
+            //float z = x * y; //initial 3d function
 
             graph3d[i][j] = roundf(z * 127 + 128);
         }
@@ -140,6 +145,8 @@ int init_resources() {
     glGenTextures(1, &texture_id);
     glBindTexture(GL_TEXTURE_2D, texture_id);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, N, N, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, graph3d);
+
+	glGenBuffers(3, vbo);
 
     //create an array for 101 * 101 verticers
     glm::vec2 vertices[101][101];
@@ -152,7 +159,7 @@ int init_resources() {
     }
 
     //Copy the array to the buffer
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferData(GL_ARRAY_BUFFER, sizeof vertices, vertices, GL_STATIC_DRAW);
 
     //Create an arrray of indices into the vertex array that traces both horizontal and vertical lines
@@ -173,7 +180,7 @@ int init_resources() {
 		}
 	}
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 100 * 101 * 4 * sizeof *indices, indices, GL_STATIC_DRAW);
 
     //fill an array of indices that describes all the trianlges needed to create a completely filled surface
@@ -191,15 +198,21 @@ int init_resources() {
         }
     }
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof indices, indices, GL_STATIC_DRAW);
 
-    cameraPos   = glm::vec3(0.0,  0.0, 0.5);
-    cameraFront = glm::vec3(0.0, -1.0, 0.0);
-    cameraUp    = glm::vec3(0.0,  0.0, 1.0);
+    resetCameraPos();
     //end of 3d initialization
     
 	return 1;
+}
+
+void resetCameraPos(){
+    cameraPos   = glm::vec3(0.0,  0.0, 1.0);
+    cameraFront = glm::vec3(0.0, -1.0, 0.0);
+    cameraUp    = glm::vec3(0.0,  0.0, 1.0);
+    rotationH = 0.0f;
+    rotationV = 0.0f;
 }
 
 void display() {
@@ -226,7 +239,7 @@ void display() {
         glUniform4fv(uniform_color, 1, red);
 
         // Draw using the vertices in our vertex buffer object
-        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo2d);
 
         //If the function has been changed tell OpenGL to copy our array to the buffer object
         if (needToUpdate){
@@ -253,12 +266,13 @@ void display() {
 
         //Model matrix for rotating the graph
         glm::mat4 model;
-        model = glm::mat4(1.0f);
+        model = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0,0,1)); //horizontal rotation 
+        model = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(1,0,0)); //vertical rotation 
 
         //View matrix - the camera tranformation
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        glm::mat4 view = glm::lookAt(cameraPosBuff, cameraPosBuff + cameraFront, cameraUp);
         //3d Projection matrix
-        glm::mat4 projection = glm::perspective(45.0f, 1.0f * 640 / 480, 0.1f, 10.0f);
+        glm::mat4 projection = glm::perspective(45.0f, 1.0f * 640 / 480, 0.01f, 10.0f);
 
         glm::mat4 vertex_transform = projection * view * model;
         scale_x = scale;
@@ -269,11 +283,15 @@ void display() {
         glUniformMatrix4fv(uniform_vertex_transform, 1, GL_FALSE, glm::value_ptr(vertex_transform));
         glUniformMatrix4fv(uniform_texture_transform, 1, GL_FALSE, glm::value_ptr(texture_transform));
 
-        glClearColor(0,0,0,0);
+        //glClearColor(0,0,0,0);
+        glClearColor(1,1,1,1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
         //Set texture interpolation mode
-        bool interpolate = true;
+        bool interpolate = false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, interpolate ? GL_LINEAR : GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, interpolate ? GL_LINEAR : GL_NEAREST);
 
@@ -283,18 +301,27 @@ void display() {
 
         glEnable(GL_DEPTH_TEST);
 
+        bool polygonoffset = true;
+        if (polygonoffset) {
+            glPolygonOffset(1, 0);
+            glEnable(GL_POLYGON_OFFSET_FILL);
+        }
+
         glEnableVertexAttribArray(attribute_coord3d);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
         glVertexAttribPointer(attribute_coord3d, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
         glDrawElements(GL_TRIANGLES, 100 * 100 * 6, GL_UNSIGNED_SHORT, 0);
+
+        glPolygonOffset(0, 0);
+        glDisable(GL_POLYGON_OFFSET_FILL);
 
         //Draw the grid, very bright 
         GLfloat bright[4] = { 2, 2, 2, 1 };
         glUniform4fv(uniform_color3d, 1, bright);
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
         glDrawElements(GL_LINES, 100 * 101 * 4, GL_UNSIGNED_SHORT, 0);
 
         //Stop using the vertex buffer object
@@ -308,13 +335,15 @@ void display() {
     }
 }
 
-void idle(){
-}
-
 void mouseMotionFunc(int x, int y){
-    if(mouseState){
+    if(leftclickState){
         mouseOffset_x = (oldMousecoords_x - x)/100.0f;
         mouseOffset_y = (oldMousecoords_y - y)/100.0f;
+
+        cameraPosBuff = cameraPos;
+        cameraPosBuff += (glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x);
+        if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPosBuff += cameraUp * mouseOffset_y;
+            else cameraPosBuff -= cameraFront * mouseOffset_y ;
 
         printf("moving x=%d, y=%d\n", x, y);
         printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
@@ -331,12 +360,19 @@ void mouseFunc(int button, int state, int x, int y){
     if(button == 4 && state == 1){
         scale /= 1.1f * scalingFactor;
     }
+
+    //left mouse button
     if(button == 0 && state == 1){
-        mouseState = 0;
-        offset_x += mouseOffset_x;
-        offset_y -= mouseOffset_y;
-        cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x;
-        cameraPos -= mouseOffset_y * cameraFront;
+        leftclickState = 0;
+        if(mode){
+            offset_x += mouseOffset_x;
+            offset_y -= mouseOffset_y;
+        }
+        else{
+            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x;
+            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPos += cameraUp * mouseOffset_y;
+                else cameraPos -= cameraFront * mouseOffset_y ;
+        }
         
         mouseOffset_x = 0;
         mouseOffset_y = 0;
@@ -344,12 +380,35 @@ void mouseFunc(int button, int state, int x, int y){
     }
 
     if(button == 0 && state == 0){
-        mouseState = 1;
+        leftclickState = 1;
         oldMousecoords_x = x;
         oldMousecoords_y = y;
         printf("click x=%d, y=%d\n", x, y);
     }
 
+    //right mouse button
+    if(button == 2 && state == 1){
+        rightclickState = 0;
+        if(mode){
+            //in 2d don't do anything yet
+        }
+        else{
+            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x;
+            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPos += cameraUp * mouseOffset_y;
+                else cameraPos -= cameraFront * mouseOffset_y ;
+        }
+        
+        mouseOffset_x = 0;
+        mouseOffset_y = 0;
+        printf("click end x=%d, y=%d\n", x, y);
+    }
+
+    if(button == 0 && state == 0){
+        leftclickState = 1;
+        oldMousecoords_x = x;
+        oldMousecoords_y = y;
+        printf("click x=%d, y=%d\n", x, y);
+    }
     printf("button = %d, state = %d\n", button, state);
     //printf("scalingFactor = %f\n", (float) scalingFactor);
 	glutPostRedisplay();
@@ -372,7 +431,7 @@ void special(int key, int x, int y) {
 	case GLUT_KEY_HOME: //to move to the default position on the graph
 		offset_x = 0.0;
 		offset_y = 0.0;
-        cameraPos = glm::vec3(0,0,1);
+        resetCameraPos;
 		scale = 1.0;
 		break;
     case GLUT_KEY_INSERT:
@@ -385,6 +444,7 @@ void special(int key, int x, int y) {
 
 void free_resources() {
 	glDeleteProgram(program);
+    glDeleteProgram(program3d);
 }
 
 DWORD WINAPI textIOthread(LPVOID param){
@@ -439,7 +499,7 @@ DWORD WINAPI textIOthread(LPVOID param){
 
 int main(int argc, char *argv[]) {
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_RGB);
+	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
 	glutInitWindowSize(640, 480);
 	glutCreateWindow("Graph plotting tool");
 
@@ -465,7 +525,6 @@ int main(int argc, char *argv[]) {
 
 	if (init_resources()) {
 		glutDisplayFunc(display);
-        glutIdleFunc(idle);
         glutMotionFunc(mouseMotionFunc);
         glutMouseFunc(mouseFunc);
 		glutSpecialFunc(special);
