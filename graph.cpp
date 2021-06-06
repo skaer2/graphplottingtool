@@ -78,6 +78,7 @@ GLuint vbo[3];
 double MySqr(double a_fVal) {  return a_fVal*a_fVal; }
 
 point graph[2000];
+GLbyte graph3d[N][N];
 bool needToUpdate = false;
 bool mode = false; //mode == true then it is set to 2d
 
@@ -138,18 +139,14 @@ int init_resources() {
     if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
         return 0;
 
-    resetCameraPos();
-
-    GLbyte graph3d[N][N];
-
     for (int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             float x = (i - N / 2) / (N / 2.0);
             float y = (j - N / 2) / (N / 2.0);
              
             float d = hypotf(x, y) * 4.0; 
-            float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
-            //float z = x * y; //initial 3d function
+            //float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
+            float z = x * y; //initial 3d function
 
             graph3d[i][j] = roundf(z * 127 + 128);
         }
@@ -216,6 +213,8 @@ int init_resources() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof indices, indices, GL_STATIC_DRAW);
 
+    resetCameraPos(); // set the camera
+
     //end of 3d initialization
     
 	return 1;
@@ -268,6 +267,13 @@ void display() {
     else{
         //3d drawing start
         glUseProgram(program3d);
+
+        if (needToUpdate){
+            needToUpdate = false;
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, N, N, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, graph3d);
+        }
+
         glUniform1i(uniform_mytexture, 0);
 
         //Model matrix for rotating the graph
@@ -494,20 +500,36 @@ DWORD WINAPI textIOthread(LPVOID param){
             p.SetExpr(test);
 
             auto myMap = p.GetUsedVar();
-            for(auto elem : myMap)
-            {
-                cout << elem.first << " " << elem.second << "\n";
-            }
+            int amountOfVars = myMap.size();
+            //cout << "myMap.size() = " << myMap.size() << '\n';
+            //for(auto elem : myMap)
+            //{
+                //cout << elem.first << " " << elem.second << "\n";
+            //}
 
             // Fill in and evaluate the values of the function
-            for (int i = 0; i < 2000; i++) {
-                double x = (i - 1000.0) / 100.0;
-                double y = (i - 1000.0) / 100.0;
+            if (amountOfVars == 1){
+                for (int i = 0; i < 2000; i++) {
+                    double x = (i - 1000.0) / 100.0;
+                    //double y = (i - 1000.0) / 100.0;
 
-                var_x = x;
-                var_y = y;
-                graph[i].x = (float) x;
-                graph[i].y = (float) p.Eval();
+                    var_x = x;
+                    graph[i].x = (float) x;
+                    graph[i].y = (float) p.Eval();
+                }
+            }
+            if(amountOfVars > 1){
+                for (int i = 0; i < N; i++){
+                    for(int j = 0; j < N; j++){
+                        double x = (i - N / 2) / (N / 2.0);
+                        double y = (j - N / 2) / (N / 2.0);
+
+                        var_x = x;
+                        var_y = y;
+                        graph3d[i][j] = ((float) p.Eval()) * 127 + 128;
+                    }
+                }
+
             }
 
             //set the flag meaning that the function has been changed
