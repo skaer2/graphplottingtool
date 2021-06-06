@@ -60,6 +60,8 @@ glm::vec3 cameraUp; //3d
 glm::vec3 cameraPosBuff;
 float rotationH;
 float rotationV;
+float rotationHBuff = rotationH;
+float rotationVBuff = rotationV;
 
 struct point {
 	GLfloat x;
@@ -78,6 +80,17 @@ double MySqr(double a_fVal) {  return a_fVal*a_fVal; }
 point graph[2000];
 bool needToUpdate = false;
 bool mode = false; //mode == true then it is set to 2d
+
+void resetCameraPos(){
+    cameraPos   = glm::vec3(0.0,  1.5, 1.0);
+    cameraFront = glm::vec3(0.0, -1.0, 0.0);
+    cameraUp    = glm::vec3(0.0,  0.0, 1.0);
+    cameraPosBuff = cameraPos;
+    rotationH = 0.0f;
+    rotationV = 0.0f;
+    rotationHBuff = rotationH;
+    rotationVBuff = rotationV;
+}
 
 int init_resources() {
     //2d initialization
@@ -124,6 +137,8 @@ int init_resources() {
 
     if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
         return 0;
+
+    resetCameraPos();
 
     GLbyte graph3d[N][N];
 
@@ -201,18 +216,9 @@ int init_resources() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof indices, indices, GL_STATIC_DRAW);
 
-    resetCameraPos();
     //end of 3d initialization
     
 	return 1;
-}
-
-void resetCameraPos(){
-    cameraPos   = glm::vec3(0.0,  0.0, 1.0);
-    cameraFront = glm::vec3(0.0, -1.0, 0.0);
-    cameraUp    = glm::vec3(0.0,  0.0, 1.0);
-    rotationH = 0.0f;
-    rotationV = 0.0f;
 }
 
 void display() {
@@ -266,8 +272,20 @@ void display() {
 
         //Model matrix for rotating the graph
         glm::mat4 model;
-        model = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(0,0,1)); //horizontal rotation 
-        model = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f), glm::vec3(1,0,0)); //vertical rotation 
+
+        model = glm::rotate(glm::mat4(1.0f), glm::radians(rotationHBuff), glm::vec3(0.0f, 0.0f, 1.0f)); //horizontal rotation 
+        glm::mat4 rotationMatrix = glm::rotate(glm::mat4(1.0f), -glm::radians(rotationHBuff), glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::vec3 rotationAxis = rotationMatrix * glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        model = glm::rotate(model
+                , glm::radians(rotationVBuff)
+                , glm::vec3(rotationAxis)
+                ); //vertical rotation 
+
+        //Scaling the graph
+        scale_x = scale;
+        scale_y = scale;
+        scale_z = scale;
+        model = glm::scale(model, glm::vec3(scale_x, scale_y, scale_z));
 
         //View matrix - the camera tranformation
         glm::mat4 view = glm::lookAt(cameraPosBuff, cameraPosBuff + cameraFront, cameraUp);
@@ -275,10 +293,7 @@ void display() {
         glm::mat4 projection = glm::perspective(45.0f, 1.0f * 640 / 480, 0.01f, 10.0f);
 
         glm::mat4 vertex_transform = projection * view * model;
-        scale_x = scale;
-        scale_y = scale;
-        scale_z = scale;
-        glm::mat4 texture_transform = glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(scale_x, scale_y, scale)), glm::vec3(0, 0, 0));
+        glm::mat4 texture_transform = glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(0, 0, 0));
 
         glUniformMatrix4fv(uniform_vertex_transform, 1, GL_FALSE, glm::value_ptr(vertex_transform));
         glUniformMatrix4fv(uniform_texture_transform, 1, GL_FALSE, glm::value_ptr(texture_transform));
@@ -336,14 +351,28 @@ void display() {
 }
 
 void mouseMotionFunc(int x, int y){
-    if(leftclickState){
+    if(leftclickState && !rightclickState){
         mouseOffset_x = (oldMousecoords_x - x)/100.0f;
         mouseOffset_y = (oldMousecoords_y - y)/100.0f;
 
         cameraPosBuff = cameraPos;
         cameraPosBuff += (glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x);
-        if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPosBuff += cameraUp * mouseOffset_y;
-            else cameraPosBuff -= cameraFront * mouseOffset_y ;
+        if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPosBuff -= cameraUp * mouseOffset_y;
+            else cameraPosBuff -= cameraFront * mouseOffset_y;
+
+        printf("moving x=%d, y=%d\n", x, y);
+        printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
+        glutPostRedisplay();
+    }
+
+    if(rightclickState && !leftclickState){
+        mouseOffset_x = (oldMousecoords_x - x)/100.0f;
+        mouseOffset_y = (oldMousecoords_y - y)/100.0f;
+
+        rotationHBuff = rotationH;
+        rotationVBuff = rotationV;
+        rotationHBuff += mouseOffset_x * 10;
+        rotationVBuff += mouseOffset_y * 10;
 
         printf("moving x=%d, y=%d\n", x, y);
         printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
@@ -370,7 +399,7 @@ void mouseFunc(int button, int state, int x, int y){
         }
         else{
             cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x;
-            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPos += cameraUp * mouseOffset_y;
+            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPos -= cameraUp * mouseOffset_y;
                 else cameraPos -= cameraFront * mouseOffset_y ;
         }
         
@@ -393,9 +422,8 @@ void mouseFunc(int button, int state, int x, int y){
             //in 2d don't do anything yet
         }
         else{
-            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x;
-            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPos += cameraUp * mouseOffset_y;
-                else cameraPos -= cameraFront * mouseOffset_y ;
+            rotationH += mouseOffset_x * 10;
+            rotationV += mouseOffset_y * 10;
         }
         
         mouseOffset_x = 0;
@@ -403,8 +431,8 @@ void mouseFunc(int button, int state, int x, int y){
         printf("click end x=%d, y=%d\n", x, y);
     }
 
-    if(button == 0 && state == 0){
-        leftclickState = 1;
+    if(button == 2 && state == 0){
+        rightclickState = 1;
         oldMousecoords_x = x;
         oldMousecoords_y = y;
         printf("click x=%d, y=%d\n", x, y);
@@ -431,8 +459,9 @@ void special(int key, int x, int y) {
 	case GLUT_KEY_HOME: //to move to the default position on the graph
 		offset_x = 0.0;
 		offset_y = 0.0;
-        resetCameraPos;
+        resetCameraPos();
 		scale = 1.0;
+        glutPostRedisplay();
 		break;
     case GLUT_KEY_INSERT:
         mode = !mode;
