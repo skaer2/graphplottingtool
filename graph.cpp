@@ -81,6 +81,8 @@ point graph[2000];
 GLbyte graph3d[N][N];
 bool needToUpdate = false;
 bool mode = false; //mode == true then it is set to 2d
+string func3d = "";
+string func2d = "";
 
 void resetCameraPos(){
     cameraPos   = glm::vec3(0.0,  1.5, 1.0);
@@ -110,6 +112,7 @@ int init_resources() {
 	glGenBuffers(1, &vbo2d);
 
 	// Fill it in just like an array
+    func2d = "sin(10*x)/(1+x^2)";
 	for (int i = 0; i < 2000; i++) {
 		float x = (i - 1000.0) / 100.0;
 
@@ -139,14 +142,15 @@ int init_resources() {
     if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
         return 0;
 
+    func3d = "(1-sqrt(x^2 + y^2)^2)*exp((sqrt(x^2 + y^2)^2)/2)";
     for (int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             float x = (i - N / 2) / (N / 2.0);
             float y = (j - N / 2) / (N / 2.0);
              
             float d = hypotf(x, y) * 4.0; 
-            //float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
-            float z = x * y; //initial 3d function
+            float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
+            //float z = x * y; //initial 3d function
 
             graph3d[i][j] = roundf(z * 127 + 128);
         }
@@ -217,6 +221,10 @@ int init_resources() {
 
     //end of 3d initialization
     
+    if(mode) 
+        cout << "Plotting the function: " << func2d << endl;
+    else cout << "Plotting the function: " << func3d << endl;
+
 	return 1;
 }
 
@@ -361,17 +369,19 @@ void mouseMotionFunc(int x, int y){
         mouseOffset_x = (oldMousecoords_x - x)/100.0f;
         mouseOffset_y = (oldMousecoords_y - y)/100.0f;
 
-        cameraPosBuff = cameraPos;
-        cameraPosBuff += (glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x);
-        if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPosBuff -= cameraUp * mouseOffset_y;
-            else cameraPosBuff -= cameraFront * mouseOffset_y;
+        if(!mode){ // not 2d mode
+            cameraPosBuff = cameraPos;
+            cameraPosBuff += (glm::normalize(glm::cross(cameraFront, cameraUp)) * mouseOffset_x);
+            if(glutGetModifiers() == GLUT_ACTIVE_SHIFT) cameraPosBuff -= cameraUp * mouseOffset_y;
+                else cameraPosBuff -= cameraFront * mouseOffset_y;
+        }
 
-        printf("moving x=%d, y=%d\n", x, y);
-        printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
+        //printf("moving x=%d, y=%d\n", x, y);
+        //printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
         glutPostRedisplay();
     }
 
-    if(rightclickState && !leftclickState){
+    if(rightclickState && !leftclickState && !mode){ // not 2d mode
         mouseOffset_x = (oldMousecoords_x - x)/100.0f;
         mouseOffset_y = (oldMousecoords_y - y)/100.0f;
 
@@ -380,8 +390,8 @@ void mouseMotionFunc(int x, int y){
         rotationHBuff += mouseOffset_x * 10;
         rotationVBuff += mouseOffset_y * 10;
 
-        printf("moving x=%d, y=%d\n", x, y);
-        printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
+        //printf("moving x=%d, y=%d\n", x, y);
+        //printf("offset_x = %f, offset_y = %f\n", mouseOffset_x, mouseOffset_y);
         glutPostRedisplay();
     }
 }
@@ -411,14 +421,14 @@ void mouseFunc(int button, int state, int x, int y){
         
         mouseOffset_x = 0;
         mouseOffset_y = 0;
-        printf("click end x=%d, y=%d\n", x, y);
+        //printf("click end x=%d, y=%d\n", x, y);
     }
 
     if(button == 0 && state == 0){
         leftclickState = 1;
         oldMousecoords_x = x;
         oldMousecoords_y = y;
-        printf("click x=%d, y=%d\n", x, y);
+        //printf("click x=%d, y=%d\n", x, y);
     }
 
     //right mouse button
@@ -434,16 +444,16 @@ void mouseFunc(int button, int state, int x, int y){
         
         mouseOffset_x = 0;
         mouseOffset_y = 0;
-        printf("click end x=%d, y=%d\n", x, y);
+        //printf("click end x=%d, y=%d\n", x, y);
     }
 
     if(button == 2 && state == 0){
         rightclickState = 1;
         oldMousecoords_x = x;
         oldMousecoords_y = y;
-        printf("click x=%d, y=%d\n", x, y);
+        //printf("click x=%d, y=%d\n", x, y);
     }
-    printf("button = %d, state = %d\n", button, state);
+    //printf("button = %d, state = %d\n", button, state);
     //printf("scalingFactor = %f\n", (float) scalingFactor);
 	glutPostRedisplay();
 }
@@ -471,6 +481,9 @@ void special(int key, int x, int y) {
 		break;
     case GLUT_KEY_INSERT:
         mode = !mode;
+        if(mode) 
+            cout << "Plotting the function: " << func2d << endl;
+        else cout << "Plotting the function: " << func3d << endl;
         break;
 	}
 
@@ -509,6 +522,7 @@ DWORD WINAPI textIOthread(LPVOID param){
 
             // Fill in and evaluate the values of the function
             if (amountOfVars == 1){
+                func2d = test;
                 for (int i = 0; i < 2000; i++) {
                     double x = (i - 1000.0) / 100.0;
                     //double y = (i - 1000.0) / 100.0;
@@ -519,6 +533,7 @@ DWORD WINAPI textIOthread(LPVOID param){
                 }
             }
             if(amountOfVars > 1){
+                func3d = test;
                 for (int i = 0; i < N; i++){
                     for(int j = 0; j < N; j++){
                         double x = (i - N / 2) / (N / 2.0);
@@ -566,8 +581,11 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	printf("Use left/right to move horizontally.\n");
-	printf("Use up/down to change the horizontal scale.\n");
+	printf("Use left mouse button to move on the x and y axis.\n");
+	printf("Use right mouse button to rotate the graph in 3d mode.\n");
+	printf("Use left mouse button while holding shift to move on the z axis in 3d mode.\n");
+	printf("Use the mouse wheel to zoom in and out. Use the mouse wheel while holding shift to zoom in and out faster\n");
+    printf("Press insert to switch between 2d and 3d vizualization modes\n");
     printf("Press home to reset the position and scale.\n");
 
 	//create thread for user console interaction
