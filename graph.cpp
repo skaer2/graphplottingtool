@@ -112,7 +112,6 @@ int init_resources() {
 	glGenBuffers(1, &vbo2d);
 
 	// Fill it in just like an array
-    func2d = "sin(10*x)/(1+x^2)";
 	for (int i = 0; i < 2000; i++) {
 		float x = (i - 1000.0) / 100.0;
 
@@ -142,7 +141,6 @@ int init_resources() {
     if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
         return 0;
 
-    func3d = "(1-sqrt(x^2 + y^2)^2)*exp((sqrt(x^2 + y^2)^2)/2)";
     for (int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             float x = (i - N / 2) / (N / 2.0);
@@ -221,10 +219,6 @@ int init_resources() {
 
     //end of 3d initialization
     
-    if(mode) 
-        cout << "Plotting the function: " << func2d << endl;
-    else cout << "Plotting the function: " << func3d << endl;
-
 	return 1;
 }
 
@@ -588,6 +582,13 @@ int main(int argc, char *argv[]) {
     printf("Press insert to switch between 2d and 3d vizualization modes\n");
     printf("Press home to reset the position and scale.\n");
 
+    func2d = "sin(10*x)/(1+x^2)";
+    func3d = "(1-sqrt(x^2 + y^2)^2)*exp((sqrt(x^2 + y^2)^2)/2)";
+    if(mode) 
+        cout << "Plotting the function: " << func2d << endl;
+    else cout << "Plotting the function: " << func3d << endl;
+
+    
 	//create thread for user console interaction
 	DWORD threadID;
     CreateThread(0, 0, textIOthread, NULL, 0, &threadID);
