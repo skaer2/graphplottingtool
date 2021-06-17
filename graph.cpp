@@ -62,10 +62,11 @@ float rotationH;
 float rotationV;
 float rotationHBuff = rotationH;
 float rotationVBuff = rotationV;
+float tex_scale = 1.0;
 
 struct point {
-	GLfloat x;
-	GLfloat y;
+    GLfloat x;
+    GLfloat y;
 };
 
 // vbo2d for the 2d buffer array
@@ -97,31 +98,31 @@ void resetCameraPos(){
 
 int init_resources() {
     //2d initialization
-	program = create_program("graph.v.glsl", "graph.f.glsl");
-	if (program == 0)
-		return 0;
+    program = create_program("graph.v.glsl", "graph.f.glsl");
+    if (program == 0)
+        return 0;
 
-	attribute_coord2d = get_attrib(program, "coord2d");
-	uniform_transform = get_uniform(program, "transform");
-	uniform_color = get_uniform(program, "color");
+    attribute_coord2d = get_attrib(program, "coord2d");
+    uniform_transform = get_uniform(program, "transform");
+    uniform_color = get_uniform(program, "color");
 
-	if (attribute_coord2d == -1 || uniform_transform == -1 || uniform_color == -1)
-		return 0;
+    if (attribute_coord2d == -1 || uniform_transform == -1 || uniform_color == -1)
+        return 0;
 
-	// Create the vertex buffer object
-	glGenBuffers(1, &vbo2d);
+    // Create the vertex buffer object
+    glGenBuffers(1, &vbo2d);
 
-	// Fill it in just like an array
-	for (int i = 0; i < 2000; i++) {
-		float x = (i - 1000.0) / 100.0;
+    // Fill it in just like an array
+    for (int i = 0; i < 2000; i++) {
+        float x = (i - 1000.0) / 100.0;
 
-		graph[i].x = x;
-		graph[i].y = sin(x * 10.0) / (1.0 + x * x); //initial function
-	}
+        graph[i].x = x;
+        graph[i].y = sin(x * 10.0) / (1.0 + x * x); //initial function
+    }
 
-	// Tell OpenGL to copy our array to the buffer object
-	glBindBuffer(GL_ARRAY_BUFFER, vbo2d);
-	glBufferData(GL_ARRAY_BUFFER, sizeof graph, graph, GL_DYNAMIC_DRAW);
+    // Tell OpenGL to copy our array to the buffer object
+    glBindBuffer(GL_ARRAY_BUFFER, vbo2d);
+    glBufferData(GL_ARRAY_BUFFER, sizeof graph, graph, GL_DYNAMIC_DRAW);
     //end of 2d initialization
 
 
@@ -160,7 +161,7 @@ int init_resources() {
     glBindTexture(GL_TEXTURE_2D, texture_id);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, N, N, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, graph3d);
 
-	glGenBuffers(3, vbo);
+    glGenBuffers(3, vbo);
 
     //create an array for 101 * 101 verticers
     glm::vec2 vertices[101][101];
@@ -178,24 +179,24 @@ int init_resources() {
 
     //Create an arrray of indices into the vertex array that traces both horizontal and vertical lines
     GLushort indices[100 * 100 * 6];
-	int i = 0;
+    int i = 0;
 
-	for (int y = 0; y < 101; y++) {
-		for (int x = 0; x < 100; x++) {
-			indices[i++] = y * 101 + x;
-			indices[i++] = y * 101 + x + 1;
-		}
-	}
+    for (int y = 0; y < 101; y++) {
+        for (int x = 0; x < 100; x++) {
+            indices[i++] = y * 101 + x;
+            indices[i++] = y * 101 + x + 1;
+        }
+    }
 
-	for (int x = 0; x < 101; x++) {
-		for (int y = 0; y < 100; y++) {
-			indices[i++] = y * 101 + x;
-			indices[i++] = (y + 1) * 101 + x;
-		}
-	}
+    for (int x = 0; x < 101; x++) {
+        for (int y = 0; y < 100; y++) {
+            indices[i++] = y * 101 + x;
+            indices[i++] = (y + 1) * 101 + x;
+        }
+    }
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 100 * 101 * 4 * sizeof *indices, indices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[1]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 100 * 101 * 4 * sizeof *indices, indices, GL_STATIC_DRAW);
 
     //fill an array of indices that describes all the trianlges needed to create a completely filled surface
     i = 0;
@@ -213,13 +214,13 @@ int init_resources() {
     }
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[2]);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof indices, indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof indices, indices, GL_STATIC_DRAW);
 
     resetCameraPos(); // set the camera
 
     //end of 3d initialization
     
-	return 1;
+    return 1;
 }
 
 void display() {
@@ -301,7 +302,7 @@ void display() {
         glm::mat4 projection = glm::perspective(45.0f, 1.0f * 640 / 480, 0.01f, 10.0f);
 
         glm::mat4 vertex_transform = projection * view * model;
-        glm::mat4 texture_transform = glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(1.0f)), glm::vec3(0, 0, 0));
+        glm::mat4 texture_transform = glm::translate(glm::scale(glm::mat4(1.0f), glm::vec3(tex_scale, tex_scale, 1)), glm::vec3(0, 0, 0));
 
         glUniformMatrix4fv(uniform_vertex_transform, 1, GL_FALSE, glm::value_ptr(vertex_transform));
         glUniformMatrix4fv(uniform_texture_transform, 1, GL_FALSE, glm::value_ptr(texture_transform));
@@ -449,43 +450,50 @@ void mouseFunc(int button, int state, int x, int y){
     }
     //printf("button = %d, state = %d\n", button, state);
     //printf("scalingFactor = %f\n", (float) scalingFactor);
-	glutPostRedisplay();
+    glutPostRedisplay();
 }
 
 void special(int key, int x, int y) {
-	switch (key) {
-	case GLUT_KEY_LEFT: //to move left on the graph
-		offset_x += 0.03;
-		break;
-	case GLUT_KEY_RIGHT: //to move right on the graph
-		offset_x -= 0.03;
-		break;
-	case GLUT_KEY_UP: //to move up on the graph
-		offset_y -= 0.3;
-		break;
-	case GLUT_KEY_DOWN: //to move down on the graph
-		offset_y += 0.3;
-		break;
-	case GLUT_KEY_HOME: //to move to the default position on the graph
-		offset_x = 0.0;
-		offset_y = 0.0;
+    switch (key) {
+    case GLUT_KEY_LEFT: //to move left on the graph
+        offset_x += 0.03;
+        break;
+    case GLUT_KEY_RIGHT: //to move right on the graph
+        offset_x -= 0.03;
+        break;
+    case GLUT_KEY_UP: //to move up on the graph
+        offset_y -= 0.3;
+        break;
+    case GLUT_KEY_DOWN: //to move down on the graph
+        offset_y += 0.3;
+        break;
+    case GLUT_KEY_HOME: //to move to the default position on the graph
+        offset_x = 0.0;
+        offset_y = 0.0;
         resetCameraPos();
-		scale = 1.0;
+        scale = 1.0;
         glutPostRedisplay();
-		break;
+        break;
     case GLUT_KEY_INSERT:
         mode = !mode;
         if(mode) 
             cout << "Plotting the function: " << func2d << endl;
         else cout << "Plotting the function: " << func3d << endl;
         break;
-	}
+    case GLUT_KEY_PAGE_UP:
+        tex_scale *= 1.5;
+        break;
+    case GLUT_KEY_PAGE_DOWN:
+        tex_scale /= 1.5;
+        break;
 
-	glutPostRedisplay();
+    }
+
+    glutPostRedisplay();
 }
 
 void free_resources() {
-	glDeleteProgram(program);
+    glDeleteProgram(program);
     glDeleteProgram(program3d);
 }
 
@@ -508,11 +516,6 @@ DWORD WINAPI textIOthread(LPVOID param){
 
             auto myMap = p.GetUsedVar();
             int amountOfVars = myMap.size();
-            //cout << "myMap.size() = " << myMap.size() << '\n';
-            //for(auto elem : myMap)
-            //{
-                //cout << elem.first << " " << elem.second << "\n";
-            //}
 
             // Fill in and evaluate the values of the function
             if (amountOfVars == 1){
@@ -558,27 +561,27 @@ DWORD WINAPI textIOthread(LPVOID param){
 }
 
 int main(int argc, char *argv[]) {
-	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
-	glutInitWindowSize(640, 480);
-	glutCreateWindow("Graph plotting tool");
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
+    glutInitWindowSize(640, 480);
+    glutCreateWindow("Graph plotting tool");
 
-	GLenum glew_status = glewInit();
+    GLenum glew_status = glewInit();
 
-	if (GLEW_OK != glew_status) {
-		fprintf(stderr, "Error: %s\n", glewGetErrorString(glew_status));
-		return 1;
-	}
+    if (GLEW_OK != glew_status) {
+        fprintf(stderr, "Error: %s\n", glewGetErrorString(glew_status));
+        return 1;
+    }
 
-	if (!GLEW_VERSION_2_0) {
-		fprintf(stderr, "No support for OpenGL 2.0 found\n");
-		return 1;
-	}
+    if (!GLEW_VERSION_2_0) {
+        fprintf(stderr, "No support for OpenGL 2.0 found\n");
+        return 1;
+    }
 
-	printf("Use left mouse button to move on the x and y axis.\n");
-	printf("Use right mouse button to rotate the graph in 3d mode.\n");
-	printf("Use left mouse button while holding shift to move on the z axis in 3d mode.\n");
-	printf("Use the mouse wheel to zoom in and out. Use the mouse wheel while holding shift to zoom in and out faster\n");
+    printf("Use left mouse button to move on the x and y axis.\n");
+    printf("Use right mouse button to rotate the graph in 3d mode.\n");
+    printf("Use left mouse button while holding shift to move on the z axis in 3d mode.\n");
+    printf("Use the mouse wheel to zoom in and out. Use the mouse wheel while holding shift to zoom in and out faster\n");
     printf("Press insert to switch between 2d and 3d vizualization modes\n");
     printf("Press home to reset the position and scale.\n");
 
@@ -589,18 +592,18 @@ int main(int argc, char *argv[]) {
     else cout << "Plotting the function: " << func3d << endl;
 
     
-	//create thread for user console interaction
-	DWORD threadID;
+    //create thread for user console interaction
+    DWORD threadID;
     CreateThread(0, 0, textIOthread, NULL, 0, &threadID);
 
-	if (init_resources()) {
-		glutDisplayFunc(display);
+    if (init_resources()) {
+        glutDisplayFunc(display);
         glutMotionFunc(mouseMotionFunc);
         glutMouseFunc(mouseFunc);
-		glutSpecialFunc(special);
-		glutMainLoop();
-	}
+        glutSpecialFunc(special);
+        glutMainLoop();
+    }
 
-	free_resources();
-	return 0;
+    free_resources();
+    return 0;
 }
