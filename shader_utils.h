@@ -1,8 +1,3 @@
-/**
- * From the OpenGL Programming wikibook: http://en.wikibooks.org/wiki/OpenGL_Programming
- * This file is in the public domain.
- * Contributors: Sylvain Beucler
- */
 #ifndef _SHADER_UTILS_H
 #define _SHADER_UTILS_H
 #include <GL/glew.h>
