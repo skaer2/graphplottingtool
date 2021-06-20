@@ -17,7 +17,7 @@
 
 #include "muParser.h"
 
-#define N 256
+#define N 101
 
 using namespace std;
 
@@ -47,11 +47,11 @@ float scalingFactor = 1.0f;
 //3d part shader variables
 GLuint program3d;
 GLint attribute_coord3d;
+GLint attribute_coordz;
 GLint uniform_vertex_transform;
 GLint uniform_texture_transform;
 GLint uniform_color3d;
 GLuint texture_id;
-GLint uniform_mytexture;
 
 //3d part variables for moving the camera
 glm::vec3 cameraPos; //3d
@@ -75,11 +75,12 @@ struct point {
 // index 2 for the 3d buffer array 3
 GLuint vbo2d;
 GLuint vbo[3]; 
+GLuint vbocoordz;
 
 double MySqr(double a_fVal) {  return a_fVal*a_fVal; }
 
 point graph[2000];
-GLbyte graph3d[N][N];
+GLfloat graph3d[N][N];
 bool needToUpdate = false;
 bool mode = false; //mode == true then it is set to 2d
 string func3d = "";
@@ -134,44 +135,47 @@ int init_resources() {
         return 0;
 
     attribute_coord3d = get_attrib(program3d, "coord3d");
+    attribute_coordz = get_attrib(program3d, "coordz");
     uniform_vertex_transform = get_uniform(program3d, "vertex_transform");
     uniform_texture_transform = get_uniform(program3d, "texture_transform");
-    uniform_mytexture = get_uniform(program3d, "mytexture");
     uniform_color3d = get_uniform(program3d, "color3d");
 
-    if(attribute_coord3d == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_mytexture == -1 || uniform_color3d == -1)
+    if(attribute_coord3d == -1 || attribute_coordz == -1 || uniform_texture_transform == -1 || uniform_vertex_transform == -1 || uniform_color3d == -1)
         return 0;
 
+    glm::vec2 vertices[101][101];
     for (int i = 0; i < N; i++){
         for(int j = 0; j < N; j++){
             float x = (i - N / 2) / (N / 2.0);
             float y = (j - N / 2) / (N / 2.0);
+            vertices[i][j].x = x;
+            vertices[i][j].y = y;
              
             float d = hypotf(x, y) * 4.0; 
             float z = (1 - d * d) * expf(d * d / -2.0); //initial 3d function
             //float z = x * y; //initial 3d function
 
-            graph3d[i][j] = roundf(z * 127 + 128);
+            graph3d[i][j] = z;
+            //cout << "coord = " << x << endl;
         }
     }
 
+    glGenBuffers(1, &vbocoordz);
+    glBindBuffer(GL_ARRAY_BUFFER, vbocoordz);
+    glBufferData(GL_ARRAY_BUFFER, sizeof graph3d, graph3d, GL_DYNAMIC_DRAW);
+
     //upload the texture
-    glActiveTexture(GL_TEXTURE0);
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, N, N, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, graph3d);
 
     glGenBuffers(3, vbo);
 
     //create an array for 101 * 101 verticers
-    glm::vec2 vertices[101][101];
 
-    for (int i = 0; i < 101; i++){
-        for (int j = 0; j < 101; j++){
-            vertices[i][j].x = (j - 50) / 50.0;
-            vertices[i][j].y = (i - 50) / 50.0;
-        }
-    }
+    //for (int i = 0; i < 101; i++){
+        //for (int j = 0; j < 101; j++){
+            //vertices[i][j].x = (j - 50) / 50.0;
+            //vertices[i][j].y = (i - 50) / 50.0;
+        //}
+    //}
 
     //Copy the array to the buffer
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
@@ -273,11 +277,14 @@ void display() {
 
         if (needToUpdate){
             needToUpdate = false;
-            glBindTexture(GL_TEXTURE_2D, texture_id);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, N, N, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, graph3d);
+            //for (int i = 0; i < N; i++){
+                //for(int j = 0; j < N; j++){
+                    //cout << "coord = " << graph3d[i][j] << endl;
+                //}
+            //}
+            glBindBuffer(GL_ARRAY_BUFFER, vbocoordz);
+            glBufferData(GL_ARRAY_BUFFER, sizeof graph3d, graph3d, GL_DYNAMIC_DRAW);
         }
-
-        glUniform1i(uniform_mytexture, 0);
 
         //Model matrix for rotating the graph
         glm::mat4 model;
@@ -311,13 +318,7 @@ void display() {
         glClearColor(1,1,1,1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         //Set texture interpolation mode
-        bool interpolate = false;
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, interpolate ? GL_LINEAR : GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, interpolate ? GL_LINEAR : GL_NEAREST);
 
         //Set the color for the triangles
         GLfloat grey[4] = { 0.5, 0.5, 0.5, 1 };
@@ -331,6 +332,9 @@ void display() {
             glEnable(GL_POLYGON_OFFSET_FILL);
         }
 
+        glEnableVertexAttribArray(attribute_coordz);
+        glBindBuffer(GL_ARRAY_BUFFER, vbocoordz);
+        glVertexAttribPointer(attribute_coordz, 1, GL_FLOAT, GL_FALSE, 0, 0);
         glEnableVertexAttribArray(attribute_coord3d);
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
         glVertexAttribPointer(attribute_coord3d, 2, GL_FLOAT, GL_FALSE, 0, 0);
@@ -538,7 +542,8 @@ DWORD WINAPI textIOthread(LPVOID param){
 
                         var_x = x;
                         var_y = y;
-                        graph3d[i][j] = ((float) p.Eval()) * 127 + 128;
+                        graph3d[i][j] = ((float) p.Eval());
+                        //cout << "coord = " << x << endl;
                     }
                 }
 
@@ -586,7 +591,7 @@ int main(int argc, char *argv[]) {
     printf("Press home to reset the position and scale.\n");
 
     func2d = "sin(10*x)/(1+x^2)";
-    func3d = "(1-sqrt(x^2 + y^2)^2)*exp((sqrt(x^2 + y^2)^2)/2)";
+    func3d = "(1-(sqrt(x^2+y^2)*4.0)^2)*exp((sqrt(x^2+y^2)*4.0)^2/-2)";
     if(mode) 
         cout << "Plotting the function: " << func2d << endl;
     else cout << "Plotting the function: " << func3d << endl;
